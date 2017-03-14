@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <mpi.h>
 #include <gmp.h>
 
@@ -69,6 +70,8 @@ int main(int argc, char **argv){
 			upper_lim = lower_lim + val_per_proc - 1;
 		}
 	}
+	//clock_t start_time, s_fact_time, f_fact_time, finish_time;
+	//start_time = clock();
 	
 	// start calculations
 	mpf_t local_result;
@@ -81,15 +84,20 @@ int main(int argc, char **argv){
 	for(unsigned long int current_step=lower_lim; current_step <= upper_lim; current_step++){
 		mpf_set_ui(mid_result, 1);
 		// calc actual factorial
-		if(current_step == lower_lim)
+		if(current_step == lower_lim){
+			//s_fact_time = clock();
 			mpf_factorial(factorial, current_step);
+			//f_fact_time=clock();
+		}
 		else
 			mpf_mul_ui(factorial, factorial, current_step);
-		
+			
 		// calc middle result
 		mpf_div(mid_result, mid_result, factorial);
 		mpf_add(local_result, local_result, mid_result);
 	}	
+	//finish_time=clock();
+	//printf("%d\t%lu\t%lu\n", rank, finish_time-start_time, f_fact_time-s_fact_time);
 	
 	// send/collect results
 	if(rank == 0){
@@ -129,13 +137,10 @@ int main(int argc, char **argv){
 		free(str);
 	}
 
-
-
 	// free GMP memory
 	mpf_clear(local_result);
 	mpf_clear(mid_result);
 	mpf_clear(factorial);
-
 
 	// finalize the MPI environment
 	ret_val = MPI_Finalize();
