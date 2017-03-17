@@ -47,6 +47,10 @@ int main(int argc, char **argv){
 	if(ret_val)
 		handle_cr_error("Error running MPI_Comm_rank", ret_val);
 	
+	// timer
+	double start_time, end_time;
+	start_time = MPI_Wtime();
+
 	// determine the task
 	int lower_lim=0;
 	int upper_lim=0;
@@ -70,8 +74,6 @@ int main(int argc, char **argv){
 			upper_lim = lower_lim + val_per_proc - 1;
 		}
 	}
-	//clock_t start_time, s_fact_time, f_fact_time, finish_time;
-	//start_time = clock();
 	
 	// start calculations
 	mpf_t local_result;
@@ -96,8 +98,6 @@ int main(int argc, char **argv){
 		mpf_div(mid_result, mid_result, factorial);
 		mpf_add(local_result, local_result, mid_result);
 	}	
-	//finish_time=clock();
-	//printf("%d\t%lu\t%lu\n", rank, finish_time-start_time, f_fact_time-s_fact_time);
 	
 	// send/collect results
 	if(rank == 0){
@@ -112,9 +112,6 @@ int main(int argc, char **argv){
 			mpf_set_str(mid_result, recv_str, 10);
 			mpf_add(local_result, local_result, mid_result);
 		}
-		printf("Result: ");
-		mpf_out_str(stdout, 10, 0, local_result);
-		printf("\n");
 	}
 	else{
 		mp_exp_t exp;
@@ -135,6 +132,17 @@ int main(int argc, char **argv){
 
 		free(str_to_send);
 		free(str);
+	}
+
+	// timer
+	end_time = MPI_Wtime();
+
+	// print results
+	if(rank == 0){
+		printf("Time: %lfs\n\n", end_time-start_time);
+		printf("Result: ");
+		mpf_out_str(stdout, 10, 0, local_result);
+		printf("\n\n");
 	}
 
 	// free GMP memory
