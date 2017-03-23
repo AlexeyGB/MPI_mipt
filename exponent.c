@@ -105,7 +105,7 @@ int main(int argc, char **argv){
  
 		char recv_str[MAX_RECV_SIZE];
 		for(int i = 1; i<num_procs; i++){
-			ret_val = MPI_Recv(&recv_str, MAX_RECV_SIZE, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			ret_val = MPI_Recv(&recv_str, MAX_RECV_SIZE, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 			if(ret_val)
 				handle_cr_error("Error running MPI_Recv", ret_val);
 			
