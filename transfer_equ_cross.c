@@ -81,7 +81,7 @@ int main(int argc, char **argv){
 		t_0[step_num] = u_t_0(t_step * step_num);
 	for(int step_num=0; step_num < x_steps_n; step_num++){
 		u_curr[step_num] = u_x_0(x_step * step_num);
-		u_prev[step_num] = u_curr[step_num];
+		//u_prev[step_num] = u_curr[step_num];
 	}
 	
 	// determine task
@@ -93,14 +93,20 @@ int main(int argc, char **argv){
 	for(int t_step_num=1; t_step_num <= t_steps_n; t_step_num++){
 		// one step
 		for(int x_step_num=x_first_step; x_step_num < x_last_step; x_step_num++){
-			if(x_step_num == 0)
-				u_next[0] = t_0[t_step_num];
-			else if(x_step_num == x_steps_n-1)
-				u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
-									 A*t_step/x_step*u_curr[x_step_num-1];
-			else
-				u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
-									 A*t_step/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
+			if(t_step_num == 1){
+				u_next[x_step_num] = u_curr[x_step_num] + t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+								     A*t_step/2/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
+			}
+			else{
+				if(x_step_num == 0)
+					u_next[0] = t_0[t_step_num];
+				else if(x_step_num == x_steps_n-1)
+					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+										 A*2*t_step/x_step*(u_curr[x_step_num-1]-u_curr[x_step_num]);
+				else
+					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+										 A*t_step/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
+			}
 		}
 		tmp = u_prev;
 		u_prev = u_curr;
@@ -164,13 +170,13 @@ int main(int argc, char **argv){
 	if(rank == 0){
 		if(*argv[5] == '1'){
 			for(int i=0; i<x_steps_n; i++)
-				printf("%lf\t", u_curr[i]);
+				printf("%lf ", u_curr[i]);
 			printf("\n");
 		}
 		else{
 			FILE *output_file = fopen(filename, "w+");
 			for(int i=0; i<x_steps_n; i++)
-				fprintf(output_file, "%lf\t", u_curr[i]);
+				fprintf(output_file, "%lf ", u_curr[i]);
 			printf("\n");
 			fclose(output_file);
 		}
