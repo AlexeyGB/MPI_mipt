@@ -3,24 +3,37 @@
 #include <mpi.h>
 #include <time.h>
 #include <string.h>
+#include <math.h>
+
+#define A 1 // coeff by du/dx
 
 #define handle_cr_error(msg, err_val) \
 	{fprintf(stderr, "%s\nError code %d\n",msg, err_val); exit(EXIT_FAILURE);}
 
-void determ_task(int *lower_lim, int *upper_lim, int global_lim, num_procs, rank);
+void determ_task(int *lower_lim, int *upper_lim, int global_lim, int num_procs, int rank);
 /* determine task for proc */
 
-double func(int t, int x){
-	// function f(t,x) here
-	return 0;
+double func(double t, double x){
+	// function f(t,x) 
+	return cos(x);
+}
+
+double u_t_0(double t){
+	// function u|x=0
+	return log(1+t*t);
+}
+
+double u_x_0(double x){
+	// function u|t=0
+	return log(1+x*x)+sin(x);
 }
 
 int main(int argc, char **argv){
 	// check input args
-	if(argc != 4){
-		printf("Error! Need 3 args: steps amount: time and x, input file's name\n");
+	if(argc != 6){
+		printf("Error! Need 5 args: steps amount: time and x, upper limits for time and x, output file's name (1 if stdout)\n");
 		exit(EXIT_FAILURE);
-	} 
+	}
 
 	int ret_val;
 
@@ -44,11 +57,18 @@ int main(int argc, char **argv){
 
 	// read args
 	int t_steps_n, x_steps_n; 		// number of steps
+	int t_max, x_max;				// upper limits 
 	char *filename;
 	t_steps_n = atoi(argv[1]);
-	x_steps_n = atoi(argv[2]);		
-	filename = argv[3];
+	x_steps_n = atoi(argv[2]);
+	t_max = atoi(argv[3]);
+	x_max = atoi(argv[4]);
+	filename = argv[5];
 
+	// step
+	double t_step = ((double)t_max)/(t_steps_n);
+	double x_step = ((double)x_max)/(x_steps_n-1);
+	
 	// alloc memory for data
 	double *t_0, *u_prev, *u_curr, *u_next;
 	t_0 = (double *) calloc(t_steps_n, sizeof(double));      // u(t,x=0)
@@ -56,61 +76,62 @@ int main(int argc, char **argv){
 	u_curr = (double *) calloc(x_steps_n, sizeof(double));
 	u_next = (double *) calloc(x_steps_n, sizeof(double));
 
-	// read input data from file
-	FILE *input_file = fopen(filename, 'r');
-	for(int i=0; i<t_steps_n, i++)
-		fscanf(input_file, "%lf", t_0+i);
-	for(int i=0; i<x_steps_n, i++){
-		fscanf(input_file, "%lf", u_curr+i);
-		u_prev[i] = u_curr[i];
+	// calculate initial and boundary conditions
+	for(int step_num=0; step_num <= t_steps_n; step_num++)
+		t_0[step_num] = u_t_0(t_step * step_num);
+	for(int step_num=0; step_num < x_steps_n; step_num++){
+		u_curr[step_num] = u_x_0(x_step * step_num);
+		u_prev[step_num] = u_curr[step_num];
 	}
-
+	
 	// determine task
-	int x_low_lim, x_up_lim;
-	determ_task(&x_low_lim, &x_up_lim, x_steps_n, num_procs, rank);
+	int x_first_step, x_last_step;
+	determ_task(&x_first_step, &x_last_step, x_steps_n, num_procs, rank);
 
 	//start calculations
 	double *tmp;
-	for(int t_step=1; t_step<t_steps_n; t_step++){
+	for(int t_step_num=1; t_step_num <= t_steps_n; t_step_num++){
 		// one step
-		for(int x_step=x_low_lim; x_step<x_up_lim; x_step++){
-			if(x_step == 0)
-				u_next[0] = t_0[t_step]; 
-			else if(x_step == x_steps_n-1)
-				u_next[x_step] = u_prev[x_step]+2*func(t_step, x_step)+(u_curr[x_step-1]);
+		for(int x_step_num=x_first_step; x_step_num < x_last_step; x_step_num++){
+			if(x_step_num == 0)
+				u_next[0] = t_0[t_step_num];
+			else if(x_step_num == x_steps_n-1)
+				u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+									 A*t_step/x_step*u_curr[x_step_num-1];
 			else
-				u_next[x_step] = u_prev[x_step]+2*func(t_step, x_step)+(u_curr[x_step-1]+u_curr[x_step+1]); 
+				u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+									 A*t_step/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
 		}
 		tmp = u_prev;
 		u_prev = u_curr;
 		u_curr = u_next;
 		u_next = tmp;
-		if(t_step)
+
 		// send&recv to/from neirghbors
 		if(rank%2 == 0){
 			// even
 			if(rank != num_procs-1){
-				MPI_Recv(u_curr+x_up_lim, 1, MPI_DOUBLE, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-				MPI_Send(u_curr+x_up_lim-1, 1, MPI_DOUBLE, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD);
+				MPI_Recv(u_curr+x_last_step, 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &status);
+				MPI_Send(u_curr+x_last_step-1, 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
 			}
 			if(rank != 0){
-				MPI_Send(u_curr+x_low_lim, 1, MPI_DOUBLE, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD);
-				MPI_Recv(u_curr+x_low_lim-1, 1, MPI_DOUBLE, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				MPI_Send(u_curr+x_first_step, 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+				MPI_Recv(u_curr+x_first_step-1, 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &status);
 			}
 		}
 		else{
 			// odd
-			MPI_Send(u_curr+x_low_lim, 1, MPI_DOUBLE, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD);
-			MPI_Recv(u_curr+x_low_lim-1, 1, MPI_DOUBLE, rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Send(u_curr+x_first_step, 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+			MPI_Recv(u_curr+x_first_step-1, 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &status);
 			if(rank != num_procs-1){
-				MPI_Recv(u_curr+x_up_lim, 1, MPI_DOUBLE, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD);
-				MPI_Send(u_curr+x_up_lim-1, 1, MPI_DOUBLE, rank+1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				MPI_Recv(u_curr+x_last_step, 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &status);
+				MPI_Send(u_curr+x_last_step-1, 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
 			}
 		}
 	}
 
 	// collect data
-	int msg_max_size=x_up_lim-x_low_lim;
+	int msg_max_size=x_last_step-x_first_step;
 	if(rank == 0){
 		// main process => recieve others' results
 		double *buf;
@@ -121,10 +142,10 @@ int main(int argc, char **argv){
 		int sender_rank;
 		int offset;
 
-		for(int i=1; i<num_procs, i++){
-			MPI_Recv(buf, msg_max_size, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		for(int i=1; i<num_procs; i++){
+			MPI_Recv(buf, msg_max_size, MPI_DOUBLE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 			MPI_Get_count(&status, MPI_DOUBLE, &msg_real_size);
-			sended_rank = status.MPI_SOURCE;
+			sender_rank = status.MPI_SOURCE;
 			if((sender_rank > edge_rank) && (edge_rank!=-1))
 				offset = (msg_max_size-1) * sender_rank + edge_rank;
 			else
@@ -136,14 +157,23 @@ int main(int argc, char **argv){
 	}
 	else{
 		// slave process => send result to the main proc
-		MPI_Send(u_curr+x_low_lim, msg_max_size, MPI_DOUBLE, 0, MPI_ANY_TAG, MPI_COMM_WORLD);
+		MPI_Send(u_curr+x_first_step, msg_max_size, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 	}
 
 	// print results
 	if(rank == 0){
-		for(int i=0; i<x_steps_n; i++)
-			printf("%lf ", u_curr[i]);
-		printf("\n");
+		if(*argv[5] == '1'){
+			for(int i=0; i<x_steps_n; i++)
+				printf("%lf\t", u_curr[i]);
+			printf("\n");
+		}
+		else{
+			FILE *output_file = fopen(filename, "w+");
+			for(int i=0; i<x_steps_n; i++)
+				fprintf(output_file, "%lf\t", u_curr[i]);
+			printf("\n");
+			fclose(output_file);
+		}
 	}
 
 	// free allocated memory
@@ -153,14 +183,14 @@ int main(int argc, char **argv){
 	free(u_prev);
 
 	// finilize th MPI environment
-	ret_val = MPI_Finilize();
+	ret_val = MPI_Finalize();
 	if(ret_val)
 		handle_cr_error("Error running MPI_Finilize", ret_val);
 
 	exit(EXIT_SUCCESS);
 }
 
-void determ_task(int *lower_lim, int *upper_lim, int global_lim, num_procs, rank){
+void determ_task(int *lower_lim, int *upper_lim, int global_lim, int num_procs, int rank){
 	int val_per_proc, val_left;
 	val_per_proc = global_lim/num_procs;
 	val_left = global_lim%num_procs;
