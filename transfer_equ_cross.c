@@ -15,17 +15,17 @@ void determ_task(int *lower_lim, int *upper_lim, int global_lim, int num_procs, 
 
 double func(double t, double x){
 	// function f(t,x) 
-	return cos(x);
+	return 0;
 }
 
 double u_t_0(double t){
 	// function u|x=0
-	return log(1+t*t);
+	return sin(t);
 }
 
 double u_x_0(double x){
 	// function u|t=0
-	return log(1+x*x)+sin(x);
+	return 0;
 }
 
 int main(int argc, char **argv){
