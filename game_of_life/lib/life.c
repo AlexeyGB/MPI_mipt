@@ -107,7 +107,11 @@ int show_state(struct game_field *field, FILE *output_file){
 	fprintf(output_file, "\n");
 	for(int i=0; i<field_size; i++){
 		for(int j=0; j<field_size; j++){
-		  fprintf(output_file, "%d ", field->cells[i][j]);
+		  //fprintf(output_file, "%d ", field->cells[i][j]);
+			if(field->cells[i][j] == 1)
+				fprintf(output_file, "⬤  ");
+			else
+				fprintf(output_file, "   ");
 		}
 		fprintf(output_file, "\n");
 	}
