@@ -23,4 +23,4 @@ game_of_life.o: game_of_life.c
 clean:
 	rm -rf *.out *.o lib/*.out lib/*.o
 
-.PHONY: all clear
+.PHONY: all clean
