@@ -14,7 +14,7 @@ void determ_task(int *lower_lim, int *upper_lim, int global_lim, int num_procs, 
 /* determine task for proc */
 
 double func(double t, double x){
-	// function f(t,x) 
+	// function f(t,x)
 	return 0;
 }
 
@@ -55,9 +55,13 @@ int main(int argc, char **argv){
 	if(ret_val)
 		handle_cr_error("Error running MPI_Comm_rank", ret_val);
 
+	// timer
+	double start_time, end_time;
+	start_time = MPI_Wtime();
+
 	// read args
 	int t_steps_n, x_steps_n; 		// number of steps
-	int t_max, x_max;				// upper limits 
+	int t_max, x_max;				// upper limits
 	char *filename;
 	t_steps_n = atoi(argv[1]);
 	x_steps_n = atoi(argv[2]);
@@ -68,7 +72,7 @@ int main(int argc, char **argv){
 	// step
 	double t_step = ((double)t_max)/(t_steps_n);
 	double x_step = ((double)x_max)/(x_steps_n-1);
-	
+
 	// alloc memory for data
 	double *t_0, *u_prev, *u_curr, *u_next;
 	t_0 = (double *) calloc(t_steps_n, sizeof(double));      // u(t,x=0)
@@ -83,7 +87,7 @@ int main(int argc, char **argv){
 		u_curr[step_num] = u_x_0(x_step * step_num);
 		//u_prev[step_num] = u_curr[step_num];
 	}
-	
+
 	// determine task
 	int x_first_step, x_last_step;
 	determ_task(&x_first_step, &x_last_step, x_steps_n, num_procs, rank);
@@ -94,17 +98,17 @@ int main(int argc, char **argv){
 		// one step
 		for(int x_step_num=x_first_step; x_step_num < x_last_step; x_step_num++){
 			if(t_step_num == 1){
-				u_next[x_step_num] = u_curr[x_step_num] + t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+				u_next[x_step_num] = u_curr[x_step_num] + t_step*func(t_step*t_step_num, x_step*x_step_num) +
 								     A*t_step/2/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
 			}
 			else{
 				if(x_step_num == 0)
 					u_next[0] = t_0[t_step_num];
 				else if(x_step_num == x_steps_n-1)
-					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) +
 										 A*2*t_step/x_step*(u_curr[x_step_num-1]-u_curr[x_step_num]);
 				else
-					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) + 
+					u_next[x_step_num] = u_prev[x_step_num] + 2*t_step*func(t_step*t_step_num, x_step*x_step_num) +
 										 A*t_step/x_step*(u_curr[x_step_num-1]- u_curr[x_step_num+1]);
 			}
 		}
@@ -166,6 +170,8 @@ int main(int argc, char **argv){
 		MPI_Send(u_curr+x_first_step, msg_max_size, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 	}
 
+	end_time = MPI_Wtime();
+
 	// print results
 	if(rank == 0){
 		if(*argv[5] == '1'){
@@ -180,6 +186,7 @@ int main(int argc, char **argv){
 			printf("\n");
 			fclose(output_file);
 		}
+		printf("\nTime: %lf\n\n", end_time-start_time);
 	}
 
 	// free allocated memory
