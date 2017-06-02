@@ -6,6 +6,8 @@
 #include <errno.h>
 
 #define STEPS_PER_TASK 5000
+#define TASK_LOWER_LIM 0.001
+#define TASK_UPPER_LIM 1.0
 
 #define handle_cr_error(msg) \
         { fprintf(stderr, "%s\n", msg); perror("Details"); exit(EXIT_FAILURE); }
@@ -19,7 +21,7 @@ struct _global_task{
 };
 
 long double func(long double x){
-  return cos(1/x/x);
+  return cos(1.0/x/x);
 }
 
 long double max_f_second_deriv(long double x){
@@ -45,8 +47,8 @@ int main(int argc, char **argv){
   long double precision = atof(argv[2]);
 
   struct _global_task global_task;
-  global_task.lower_lim = 0.1;
-  global_task.upper_lim = 1;
+  global_task.lower_lim = TASK_LOWER_LIM;
+  global_task.upper_lim = TASK_UPPER_LIM;
   global_task.result = 0;
   global_task.precision = precision;
 
